@@ -85,16 +85,19 @@ safe_execute <- function(pool, query, params = list()) {
     on.exit(pool::poolReturn(conn))
     
     if (length(params) > 0) {
-      query <- convert_params_to_mysql(query, length(params))
-      result <- DBI::dbExecute(conn, query, params = unname(params))
+      converted_query <- convert_params_to_mysql(query, length(params))
+      result <- DBI::dbExecute(conn, converted_query, params = unname(params))
     } else {
       result <- DBI::dbExecute(conn, query)
     }
     result
   }, error = function(e) {
+    converted <- if (length(params) > 0) convert_params_to_mysql(query, length(params)) else query
     log_app_error("Database execute failed", 
                   error = e$message, 
-                  query = substr(query, 1, 200))
+                  query = substr(converted, 1, 300),
+                  param_count = length(params),
+                  param_classes = paste(sapply(params, class), collapse = ", "))
     -1
   })
 }
