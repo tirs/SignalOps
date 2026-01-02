@@ -19,8 +19,12 @@ renv/staging/
 .env.local
 .env.*.local
 *.env
+.Renviron
 secrets/
 credentials/
+
+# Config with credentials (use config.yml.example as template)
+app/config.yml
 
 # Logs
 logs/

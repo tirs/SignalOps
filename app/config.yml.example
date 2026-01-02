@@ -1,0 +1,72 @@
+default:
+  app:
+    name: "SignalOps"
+    version: "1.0.0"
+    timezone: "UTC"
+    max_upload_mb: 50
+    session_timeout_minutes: 60
+    
+  database:
+    driver: "mysql"
+    host: !expr Sys.getenv("DB_HOST", "localhost")
+    port: !expr as.integer(Sys.getenv("DB_PORT", "3306"))
+    name: !expr Sys.getenv("DB_NAME", "signalops")
+    user: !expr Sys.getenv("DB_USER", "signalops_user")
+    password: !expr Sys.getenv("DB_PASSWORD", "")
+    pool_size: 5
+    idle_timeout: 60
+    
+  auth:
+    secret_key: !expr Sys.getenv("AUTH_SECRET", "change-this-in-production")
+    bcrypt_cost: 12
+    session_duration_hours: 24
+    max_login_attempts: 5
+    lockout_duration_minutes: 15
+    
+  cache:
+    enabled: true
+    ttl_seconds: 300
+    max_size_mb: 100
+    
+  logging:
+    level: "INFO"
+    format: "json"
+    file: "logs/signalops.log"
+    rotate_mb: 10
+    keep_files: 7
+    
+  anomaly:
+    window_days: 30
+    zscore_threshold_low: 2.0
+    zscore_threshold_medium: 3.0
+    zscore_threshold_high: 4.0
+    min_data_points: 7
+    
+  validation:
+    max_errors_display: 100
+    chunk_size: 1000
+
+development:
+  inherits: default
+  logging:
+    level: "DEBUG"
+  cache:
+    enabled: false
+
+production:
+  inherits: default
+  app:
+    session_timeout_minutes: 30
+  database:
+    pool_size: 10
+  logging:
+    level: "INFO"
+  auth:
+    bcrypt_cost: 14
+
+test:
+  inherits: default
+  logging:
+    level: "WARN"
+  cache:
+    enabled: false
