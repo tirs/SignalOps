@@ -1,6 +1,11 @@
 # SignalOps Database Pool Service
 # Connection pooling and database utilities for MySQL
 
+# Local references to logging functions (defined in logging.R, sourced in global.R)
+.log_error <- function(...) get(".log_error", envir = globalenv())(...)
+.log_info <- function(...) get(".log_info", envir = globalenv())(...)
+.log_warn <- function(...) get("log_app_warn", envir = globalenv())(...)
+
 #' Initialize database connection pool
 #' @param config Database configuration list
 #' @return Database pool object
@@ -24,8 +29,9 @@ init_db_pool <- function(config) {
 check_db_health <- function(pool) {
   start_time <- Sys.time()
   tryCatch({
-    result <- DBI::dbGetQuery(pool, "SELECT 1 as `check`")
-    latency_ms <- as.numeric(difftime(Sys.time(), start_time, units = "secs")) * 1000
+    DBI::dbGetQuery(pool, "SELECT 1 as `check`")
+    elapsed <- difftime(Sys.time(), start_time, units = "secs")
+    latency_ms <- as.numeric(elapsed) * 1000
     list(
       status = "healthy",
       latency_ms = round(latency_ms, 2),
@@ -57,7 +63,11 @@ safe_query <- function(pool, query, params = list()) {
       DBI::dbGetQuery(pool, query)
     }
   }, error = function(e) {
-    converted <- if (length(params) > 0) convert_params_to_mysql(query, length(params)) else query
+    if (length(params) > 0) {
+      converted <- convert_params_to_mysql(query, length(params))
+    } else {
+      converted <- query
+    }
     # Write error details to file for debugging
     error_msg <- paste0(
       "TIME: ", Sys.time(), "\n",
@@ -66,7 +76,7 @@ safe_query <- function(pool, query, params = list()) {
       "PARAMS: ", length(params), "\n\n"
     )
     cat(error_msg, file = "/var/log/signalops/db_errors.log", append = TRUE)
-    log_app_error("Database query failed")
+    .log_error("Database query failed")
     NULL
   })
 }
@@ -118,16 +128,22 @@ safe_execute <- function(pool, query, params = list()) {
     }
     result
   }, error = function(e) {
-    converted <- if (length(params) > 0) convert_params_to_mysql(query, length(params)) else query
+    if (length(params) > 0) {
+      converted <- convert_params_to_mysql(query, length(params))
+    } else {
+      converted <- query
+    }
     # Write error details to file for debugging
+    param_classes <- sapply(params, function(x) paste(class(x), collapse = "/"))
     error_msg <- paste0(
       "TIME: ", Sys.time(), "\n",
       "ERROR: ", e$message, "\n",
       "QUERY: ", substr(converted, 1, 500), "\n",
-      "PARAMS: ", length(params), " - ", paste(sapply(params, function(x) paste(class(x), collapse="/")), collapse=", "), "\n\n"
+      "PARAMS: ", length(params), " - ",
+      paste(param_classes, collapse = ", "), "\n\n"
     )
     cat(error_msg, file = "/var/log/signalops/db_errors.log", append = TRUE)
-    log_app_error("Database execute failed")
+    .log_error("Database execute failed")
     -1
   })
 }
@@ -147,7 +163,7 @@ with_transaction <- function(pool, fn) {
     result
   }, error = function(e) {
     DBI::dbRollback(conn)
-    log_app_error("Transaction failed and rolled back", error = e$message)
+    .log_error("Transaction failed and rolled back", error = e$message)
     NULL
   })
 }
@@ -215,12 +231,12 @@ bulk_insert <- function(pool, table, data, chunk_size = 1000) {
     }
     DBI::dbCommit(conn)
     
-    log_app_info("Bulk insert completed", 
+    .log_info("Bulk insert completed", 
                  table = table, 
                  rows = total_inserted)
     total_inserted
   }, error = function(e) {
-    log_app_error("Bulk insert failed", 
+    .log_error("Bulk insert failed", 
                   table = table, 
                   error = e$message)
     -1
