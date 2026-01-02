@@ -93,11 +93,15 @@ safe_execute <- function(pool, query, params = list()) {
     result
   }, error = function(e) {
     converted <- if (length(params) > 0) convert_params_to_mysql(query, length(params)) else query
-    log_app_error("Database execute failed", 
-                  error = e$message, 
-                  query = substr(converted, 1, 300),
-                  param_count = length(params),
-                  param_classes = paste(sapply(params, class), collapse = ", "))
+    # Write error details to file for debugging
+    error_msg <- paste0(
+      "TIME: ", Sys.time(), "\n",
+      "ERROR: ", e$message, "\n",
+      "QUERY: ", substr(converted, 1, 500), "\n",
+      "PARAMS: ", length(params), " - ", paste(sapply(params, function(x) paste(class(x), collapse="/")), collapse=", "), "\n\n"
+    )
+    cat(error_msg, file = "/var/log/signalops/db_errors.log", append = TRUE)
+    log_app_error("Database execute failed")
     -1
   })
 }
