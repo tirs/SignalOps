@@ -49,17 +49,24 @@ safe_query <- function(pool, query, params = list()) {
   tryCatch({
     if (length(params) > 0) {
       # MySQL uses ? placeholders, convert from $1, $2... format
-      query <- convert_params_to_mysql(query, length(params))
+      converted_query <- convert_params_to_mysql(query, length(params))
       # Sanitize params to handle NULL values (convert to NA)
       params <- sanitize_params(params)
-      DBI::dbGetQuery(pool, query, params = unname(params))
+      DBI::dbGetQuery(pool, converted_query, params = unname(params))
     } else {
       DBI::dbGetQuery(pool, query)
     }
   }, error = function(e) {
-    log_app_error("Database query failed", 
-                  error = e$message, 
-                  query = substr(query, 1, 200))
+    converted <- if (length(params) > 0) convert_params_to_mysql(query, length(params)) else query
+    # Write error details to file for debugging
+    error_msg <- paste0(
+      "TIME: ", Sys.time(), "\n",
+      "ERROR: ", e$message, "\n",
+      "QUERY: ", substr(converted, 1, 500), "\n",
+      "PARAMS: ", length(params), "\n\n"
+    )
+    cat(error_msg, file = "/var/log/signalops/db_errors.log", append = TRUE)
+    log_app_error("Database query failed")
     NULL
   })
 }
