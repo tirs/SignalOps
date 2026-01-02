@@ -50,6 +50,8 @@ safe_query <- function(pool, query, params = list()) {
     if (length(params) > 0) {
       # MySQL uses ? placeholders, convert from $1, $2... format
       query <- convert_params_to_mysql(query, length(params))
+      # Sanitize params to handle NULL values (convert to NA)
+      params <- sanitize_params(params)
       DBI::dbGetQuery(pool, query, params = unname(params))
     } else {
       DBI::dbGetQuery(pool, query)
@@ -74,6 +76,21 @@ convert_params_to_mysql <- function(query, num_params) {
   query
 }
 
+#' Sanitize parameters for MySQL - convert NULL to NA (which has length 1)
+#' @param params List of parameters
+#' @return Sanitized list of parameters
+sanitize_params <- function(params) {
+  lapply(params, function(x) {
+    if (is.null(x)) {
+      NA_character_
+    } else if (length(x) == 0) {
+      NA_character_
+    } else {
+      x
+    }
+  })
+}
+
 #' Execute a statement (INSERT, UPDATE, DELETE)
 #' @param pool Database pool
 #' @param query SQL statement
@@ -86,6 +103,8 @@ safe_execute <- function(pool, query, params = list()) {
     
     if (length(params) > 0) {
       converted_query <- convert_params_to_mysql(query, length(params))
+      # Sanitize params to handle NULL values (convert to NA)
+      params <- sanitize_params(params)
       result <- DBI::dbExecute(conn, converted_query, params = unname(params))
     } else {
       result <- DBI::dbExecute(conn, query)
