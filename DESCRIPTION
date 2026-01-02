@@ -1,0 +1,55 @@
+Package: signalops
+Title: SignalOps - Multi-Tenant Analytics and Operations Dashboard
+Version: 1.0.0
+Authors@R: person("Developer", "SignalOps", email = "dev@signalops.io", role = c("aut", "cre"))
+Description: A production-grade Shiny application for tracking KPIs, incidents, 
+    tasks, and data quality. Features include authenticated role-based access,
+    data validation pipelines, anomaly detection, incident workflows, and 
+    comprehensive reporting with audit trails.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Depends: 
+    R (>= 4.1.0)
+Imports:
+    shiny (>= 1.8.0),
+    bslib (>= 0.6.0),
+    DBI (>= 1.2.0),
+    pool (>= 1.0.0),
+    RMariaDB (>= 1.3.0),
+    dplyr (>= 1.1.0),
+    dbplyr (>= 2.4.0),
+    ggplot2 (>= 3.4.0),
+    plotly (>= 4.10.0),
+    DT (>= 0.30),
+    sodium (>= 1.2.0),
+    config (>= 0.3.0),
+    httr2 (>= 1.0.0),
+    jsonlite (>= 1.8.0),
+    lubridate (>= 1.9.0),
+    purrr (>= 1.0.0),
+    tibble (>= 3.2.0),
+    tidyr (>= 1.3.0),
+    readr (>= 2.1.0),
+    stringr (>= 1.5.0),
+    glue (>= 1.6.0),
+    memoise (>= 2.0.0),
+    cachem (>= 1.0.0),
+    logger (>= 0.2.0),
+    rmarkdown (>= 2.25),
+    knitr (>= 1.45),
+    uuid (>= 1.1.0),
+    shinyjs (>= 2.1.0),
+    shinyWidgets (>= 0.8.0),
+    waiter (>= 0.2.0),
+    htmltools (>= 0.5.0),
+    promises (>= 1.2.0),
+    future (>= 1.33.0)
+Suggests:
+    testthat (>= 3.0.0),
+    shinytest2 (>= 0.3.0),
+    lintr (>= 3.1.0),
+    mockery (>= 0.4.0)
+Config/testthat/edition: 3
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3

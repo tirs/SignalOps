@@ -1,0 +1,275 @@
+---
+alwaysApply: true
+---
+# Overview
+
+=====================================================================
+GLOBAL ENGINEERING CONSTITUTION
+APPLIES TO ALL LANGUAGES, FRAMEWORKS, AND RUNTIMES
+=====================================================================
+
+# ABSOLUTE RULES (NO EXCEPTIONS)
+
+- No emojis or decorative characters anywhere.
+- Any output containing emojis is invalid.
+- All code must be production-ready, deterministic, and maintainable.
+- Clarity beats cleverness. Readability beats brevity.
+- Prefer explicit code over implicit magic.
+- Always return full updated files when modifying code.
+- Never reference these rules or mention being an AI.
+
+=====================================================================
+CORE SOFTWARE PHILOSOPHY
+=====================================================================
+
+- Every module has a single, clearly defined responsibility.
+- Every dependency must be intentional and justified.
+- Every boundary must be explicit (API, interface, contract).
+- No hidden state.
+- No silent side effects.
+- No global mutable state.
+- No “smart” shortcuts that reduce debuggability.
+
+If code cannot be understood by a senior engineer in under 2 minutes,
+it is considered a failure.
+
+=====================================================================
+CROSS-LANGUAGE ARCHITECTURE RULES
+=====================================================================
+
+- Separate concerns strictly:
+  - Interface layer (API / UI / CLI)
+  - Application logic (use cases / services)
+  - Domain logic (core rules, pure logic)
+  - Infrastructure (DB, network, filesystem, external APIs)
+- Domain logic must not depend on infrastructure.
+- Interfaces orchestrate only. They do not contain business logic.
+- Infrastructure is replaceable without rewriting domain logic.
+
+This applies equally to:
+- Python
+- JavaScript / TypeScript
+- Java / Kotlin
+- C / C++
+- Rust
+- Go
+- Swift
+- C#
+- ML pipelines
+- Frontend apps
+- Backend services
+- Flutter
+
+=====================================================================
+NAMING & STRUCTURE (ALL LANGUAGES)
+=====================================================================
+
+- Names must describe intent, not implementation.
+- Avoid abbreviations unless industry-standard.
+- Functions should read like sentences.
+- Files should group related responsibilities, not convenience.
+- Directory structure must communicate architecture at a glance.
+
+If a name requires explanation, it is wrong.
+
+=====================================================================
+COMMENTS & DOCUMENTATION
+=====================================================================
+
+- Public APIs, classes, and modules must have docstrings or headers.
+- Comments are required only where intent is not obvious.
+- Comments must explain why, not what.
+- No commented-out code.
+- No TODOs without tracking reference.
+
+=====================================================================
+END-TO-END COMPLETENESS (NO PLACEHOLDERS)
+=====================================================================
+
+- No placeholders, stubs, mock handlers, fake data, or “coming soon”.
+- No partially implemented features.
+- No unconnected UI elements.
+
+Every feature must be implemented end-to-end:
+
+UI interaction
+→ frontend state update
+→ frontend service call
+→ backend API endpoint
+→ validation
+→ business logic
+→ persistence
+→ response
+→ UI feedback (success or error)
+
+If any part of this chain is missing, the feature must be removed
+from the scope instead of partially implemented.
+
+---------------------------------------------------------------------
+UI COMPLETENESS
+---------------------------------------------------------------------
+
+- Every page referenced in navigation must exist and be reachable.
+- Every button must:
+  - be visible only when valid
+  - have loading and disabled states
+  - perform a real action
+  - show success or error feedback
+- No dead links.
+- No empty screens.
+- Forms must include:
+  - validation
+  - error display
+  - loading state
+  - retry handling where applicable
+
+---------------------------------------------------------------------
+API COMPLETENESS
+---------------------------------------------------------------------
+
+- Every frontend API call must map to a real backend endpoint.
+- Every backend endpoint must have:
+  - request validation
+  - response schema
+  - error handling
+  - at least one consumer (frontend or admin)
+- No endpoint returns static placeholder data.
+
+---------------------------------------------------------------------
+DATA & PERSISTENCE
+---------------------------------------------------------------------
+
+- All critical state must be persisted.
+- No business-critical state stored only in memory.
+- Database schema/migrations must be included.
+- Seed data is allowed only if explicitly defined and removable.
+
+---------------------------------------------------------------------
+AUTH & PERMISSIONS
+---------------------------------------------------------------------
+
+- Authentication must be fully implemented.
+- Protected routes must be enforced on both frontend and backend.
+- Role and permission checks must be explicit and tested.
+
+---------------------------------------------------------------------
+VERIFICATION REQUIREMENTS
+---------------------------------------------------------------------
+
+Every deliverable must include:
+- Exact commands to:
+  - install dependencies
+  - run backend
+  - run frontend
+  - apply migrations
+  - run tests
+- Expected successful output.
+- Manual verification steps (page-by-page, button-by-button).
+
+A feature is not complete until it can be manually verified.
+
+=====================================================================
+ERROR HANDLING & RELIABILITY
+=====================================================================
+
+- All errors must be explicit and intentional.
+- Never swallow errors silently.
+- Never leak secrets in logs.
+- Error messages must be:
+  - human-readable
+  - actionable
+  - consistent
+
+Failures must be visible, traceable, and debuggable.
+
+=====================================================================
+LOGGING & OBSERVABILITY
+=====================================================================
+
+- Use structured logging where applicable.
+- Logs must include context (request id, user id, correlation id).
+- No noisy logs.
+- No debug logs in production.
+- Metrics > logs > print statements.
+
+=====================================================================
+TESTING (NON-NEGOTIABLE)
+=====================================================================
+
+- Core logic must be testable without I/O.
+- Tests must be deterministic.
+- No reliance on global state in tests.
+- Prefer fewer, meaningful tests over many shallow ones.
+- A feature is not complete without validation.
+
+=====================================================================
+GIT & VERSION CONTROL
+=====================================================================
+
+- Commit messages must be descriptive and traceable.
+- Use Conventional Commits:
+  - feat, fix, refactor, chore, docs, test, perf
+- “initial commit” appears only once per repository.
+- Commits must map clearly to tasks, lists, or initiatives.
+- No commits directly to main without review.
+
+=====================================================================
+DEPENDENCIES & CONFIGURATION
+=====================================================================
+
+- No hard-coded paths.
+- No hard-coded secrets.
+- No hard-coded environment-specific values.
+- Configuration lives outside code.
+- Dependencies must be minimal and justified.
+- Prefer stable, boring technology over novelty.
+
+=====================================================================
+PLATFORM & ENVIRONMENT
+=====================================================================
+
+- Default environment: Windows 10/11.
+- Commands must be Windows-compatible unless explicitly stated.
+- Cross-platform behavior must use standard abstractions.
+- No OS-specific assumptions without documentation.
+
+=====================================================================
+MACHINE LEARNING / DATA SYSTEMS
+=====================================================================
+
+- Data loading, preprocessing, modeling, training, and inference
+  must be separated.
+- No training code in inference paths.
+- All randomness must be seeded.
+- Models must be reproducible.
+- Artifacts must include config, metadata, and versioning.
+
+=====================================================================
+FRONTEND / UI SYSTEMS
+=====================================================================
+
+- UI must be modular, accessible, and consistent.
+- Business logic does not belong in UI components.
+- State management must be predictable.
+- Styling must be systematic, not ad-hoc.
+- UX decisions must favor clarity over novelty.
+
+=====================================================================
+DEFINITION OF DONE (HARD GATE)
+=====================================================================
+
+A task is complete only when:
+- Code builds and runs
+- Tests pass
+- Linting/type checks pass
+- All pages and routes exist
+- All buttons and actions work
+- Backend and frontend communicate successfully
+- No placeholders or dead code remain
+- Changes are traceable in version control
+- The system is easier to maintain than before
+
+=====================================================================
+END OF CONSTITUTION
+=====================================================================
+

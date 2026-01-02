@@ -1,0 +1,70 @@
+# R
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# renv
+renv/library/
+renv/local/
+renv/cellar/
+renv/lock/
+renv/python/
+renv/sandbox/
+renv/staging/
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.env
+secrets/
+credentials/
+
+# Logs
+logs/
+*.log
+
+# Cache
+.cache/
+cache/
+*.rds
+!app/data/*.rds
+
+# System
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Build artifacts
+*.tar.gz
+*.zip
+
+# Test artifacts
+tests/testthat/_snaps/
+.lintr
+
+# Docker
+.docker/
+
+# Uploads and temp
+uploads/
+temp/
+tmp/
+
+# Backup files
+*.bak
+*.backup
+
+# Database dumps
+*.sql.gz
+*.dump
+backups/

@@ -1,0 +1,27 @@
+# SignalOps Production Environment Variables
+# Copy this to /srv/shiny-server/signalops/.Renviron on the server
+# Update the values with your actual credentials
+
+# Database Configuration
+SIGNALOPS_DB_TYPE=mysql
+SIGNALOPS_DB_HOST=srv1539.hstgr.io
+SIGNALOPS_DB_PORT=3306
+SIGNALOPS_DB_NAME=your_database_name
+SIGNALOPS_DB_USER=your_database_user
+SIGNALOPS_DB_PASSWORD=your_database_password
+
+# Application Settings
+SIGNALOPS_ENV=production
+SIGNALOPS_DEBUG=false
+SIGNALOPS_LOG_LEVEL=info
+
+# Session Configuration
+SIGNALOPS_SESSION_SECRET=generate_a_secure_random_string_here
+SIGNALOPS_SESSION_TIMEOUT=28800
+
+# SMTP for password reset (optional)
+SIGNALOPS_SMTP_HOST=
+SIGNALOPS_SMTP_PORT=587
+SIGNALOPS_SMTP_USER=
+SIGNALOPS_SMTP_PASSWORD=
+SIGNALOPS_SMTP_FROM=noreply@syncronhub.com

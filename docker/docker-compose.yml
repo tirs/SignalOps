@@ -1,0 +1,57 @@
+# SignalOps Docker Compose Configuration
+# Production deployment with Remote MySQL, Shiny, and Nginx
+
+version: '3.8'
+
+services:
+  # Shiny Application (connects to remote MySQL on Hostinger)
+  shiny:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: signalops-app
+    restart: unless-stopped
+    environment:
+      DB_HOST: ${DB_HOST:-srv1539.hstgr.io}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_NAME: ${DB_NAME:-u280406916_SignalOps}
+      DB_USER: ${DB_USER:-u280406916_SignalOps}
+      DB_PASSWORD: ${DB_PASSWORD:-6GSaZLVVPMi>}
+      AUTH_SECRET: ${AUTH_SECRET:-change-this-in-production}
+      R_CONFIG_ACTIVE: production
+    volumes:
+      - shiny_logs:/srv/shiny-server/signalops/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3838/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - signalops-network
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: signalops-proxy
+    restart: unless-stopped
+    depends_on:
+      - shiny
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    networks:
+      - signalops-network
+
+volumes:
+  shiny_logs:
+    driver: local
+  nginx_logs:
+    driver: local
+
+networks:
+  signalops-network:
+    driver: bridge

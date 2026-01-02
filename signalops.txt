@@ -1,0 +1,395 @@
+====================================================================
+FILE: SHOCK_PROOF_SHINY_PORTFOLIO_SCOPE.txt
+PROJECT: SHINY "PROOF-OF-SHIP" — PRODUCTION-GRADE ANALYTICS APP
+GOAL: A portfolio-grade Shiny app that looks and behaves like a real
+      enterprise tool, with clean architecture, tests, CI/CD, and
+      Hostinger deployment.
+====================================================================
+
+0) WHAT THIS IS (NO FLUFF)
+This is not a “dashboard demo”.
+This is a small but serious product: authenticated, role-based, audited,
+database-backed, tested, containerized, and deployed with monitoring.
+
+The goal is to make one reviewer reaction inevitable:
+“This person ships production software, not Shiny scripts.”
+
+====================================================================
+1) PRODUCT OVERVIEW
+====================================================================
+
+App Name: SignalOps (Working Title)
+Type: Multi-tenant analytics + operations dashboard
+Use Case: Track KPIs, incidents, tasks, and data quality in one place.
+Audience: Ops/Analytics leads + managers.
+
+Core Concept:
+- Ingest a dataset (CSV upload + scheduled import)
+- Validate and persist to Postgres
+- Provide KPI dashboards + drill-down
+- Provide anomaly detection + alerts log
+- Provide role-based workflows (triage, comments, status)
+- Provide full audit trail and exportable reports
+
+This demonstrates:
+- Shiny modules, performance, scaling
+- R as backend service layer
+- Clean project structure & coding standards
+- Deployment and operations maturity
+
+====================================================================
+2) FEATURES (WHAT WILL “SHOCK” HIM)
+====================================================================
+
+2.1 Authentication + Roles (Non-Negotiable)
+- Email/password login (hashed) with session management
+- Roles: Admin, Analyst, Viewer
+- Permissions enforced server-side (not just UI hiding)
+- Password reset flow (token-based)
+
+2.2 Multi-Page App (Real Navigation, Real State)
+- Overview (KPI + trend)
+- Drill-down Explorer (filters, joins, search, paging)
+- Data Quality (validation results, failed rows, rules)
+- Anomalies (detected events, severity, timeline)
+- Incidents / Actions (create, assign, status, comments)
+- Reports (PDF/HTML export + scheduled snapshot)
+- Admin (users, roles, tenants, settings, job runs)
+
+2.3 Data Layer That Looks Like Production
+- Postgres backing store with migrations
+- Schema design that is explicit and documented
+- Data import pipeline:
+  - Upload CSV -> staging -> validate -> commit
+  - Store validation errors per row + per rule
+  - Keep versioned imports (import_id)
+- Job run logging (start/end, status, error trace)
+
+2.4 Data Quality Rules Engine
+- Configurable validation rules:
+  - Required columns
+  - Type checks
+  - Range checks
+  - Allowed values
+  - Uniqueness constraints
+- Results stored and visualized:
+  - Error count by rule, by column
+  - “Top failing rows” table
+  - Download error report CSV
+
+2.5 Anomaly Detection That Is Simple but Legit
+- Baseline model per metric:
+  - rolling mean/std OR robust median/MAD
+- Detect outliers:
+  - severity levels (low/medium/high)
+- Explanations:
+  - show baseline, thresholds, and current value
+- Store anomalies to DB and display:
+  - timeline chart
+  - anomaly table with drilldown
+
+2.6 Workflow (This makes it feel real)
+- Convert anomaly -> incident
+- Assign owner
+- Status transitions (Open, Investigating, Mitigated, Closed)
+- Comments thread per incident
+- SLA timer and “age” view
+- Audit trail of all changes
+
+2.7 Performance (No “Shiny is slow” excuses)
+- Server-side DataTables / paging for large tables
+- Caching:
+  - memoise or local cache keyed by filters
+- Async:
+  - background job for imports and heavier computations
+- Guardrails:
+  - limit row preview, chunked processing for uploads
+
+2.8 Export / Reporting
+- Generate PDF/HTML report (parameterized)
+- Export filtered data as CSV
+- Export anomaly log + incidents log
+
+2.9 Observability (This is rare in freelancers)
+- Structured logging (json-style)
+- Health endpoint / status panel
+- Metrics:
+  - active sessions
+  - query timings
+  - import durations
+- Error capture:
+  - global error handler with friendly UI + server logs
+- Admin view: job history + failures
+
+====================================================================
+3) TECH STACK (PRODUCTION-CREDIBLE)
+====================================================================
+
+Frontend:
+- Shiny + bslib (clean theming) + plotly/ggplot2
+- DT with server-side processing
+- Shiny modules for each major page/component
+
+Backend (R):
+- plumber endpoints (optional but impressive) for health + internal APIs
+- DB access with pool + DBI
+- Config management with config package
+- Migrations with a migration tool (or custom SQL migrations)
+
+Database:
+- PostgreSQL (Hostinger VPS or managed DB if available)
+
+Infrastructure:
+- Dockerized app
+- Nginx reverse proxy
+- HTTPS via Let’s Encrypt
+- Systemd service OR docker compose restart policy
+- Daily DB backups + retention
+
+CI/CD:
+- GitHub Actions:
+  - R CMD check / lintr / unit tests
+  - Build Docker image
+  - Deploy to Hostinger VPS via SSH (pull + restart)
+
+Testing:
+- testthat for unit tests
+- shinytest2 for at least 2 end-to-end flows:
+  - login -> view dashboard
+  - upload -> validate -> see errors
+
+Code Quality:
+- lintr rules enforced
+- consistent formatting
+- documented modules and service boundaries
+
+====================================================================
+4) REPO STRUCTURE (THIS IS WHAT HE WANTS TO SEE)
+====================================================================
+
+repo/
+  README.md
+  DESCRIPTION
+  renv.lock
+  .Rprofile
+  docker/
+    Dockerfile
+    docker-compose.yml
+    nginx.conf
+  app/
+    app.R
+    global.R
+    config.yml
+    R/
+      modules/
+        mod_login.R
+        mod_nav.R
+        mod_overview.R
+        mod_explorer.R
+        mod_quality.R
+        mod_anomalies.R
+        mod_incidents.R
+        mod_reports.R
+        mod_admin.R
+      services/
+        db_pool.R
+        auth_service.R
+        import_service.R
+        validation_service.R
+        anomaly_service.R
+        incident_service.R
+        report_service.R
+      utils/
+        logging.R
+        caching.R
+        helpers.R
+    www/
+      styles.css
+      logo.svg
+  migrations/
+    001_init.sql
+    002_add_audit.sql
+    003_add_jobs.sql
+  tests/
+    testthat/
+    shinytest2/
+  scripts/
+    seed_demo_data.R
+    run_migrations.R
+
+README will include:
+- local run steps
+- deployment steps
+- architecture diagram
+- screenshots
+
+====================================================================
+5) DEPLOYMENT ON HOSTINGER (REALISTIC PLAN)
+====================================================================
+
+Assumption:
+You have Hostinger VPS access (Ubuntu). If only shared hosting exists,
+you still can deploy via container if VPS supports it; otherwise you need
+a VPS. (Production-grade requires VPS.)
+
+Steps:
+- Provision VPS (Ubuntu)
+- Install Docker + docker compose
+- Setup Nginx reverse proxy + SSL
+- Configure environment variables (DB creds, secrets)
+- Run migrations
+- Bring up stack:
+  - postgres container (or external DB)
+  - shiny container
+  - nginx container
+- Add backups:
+  - daily pg_dump -> /backups
+  - rotate backups (7/30 days)
+- Add monitoring:
+  - health endpoint
+  - uptime checker (optional)
+
+====================================================================
+6) SECURITY BASELINE (NO CHILDISH MISTAKES)
+====================================================================
+
+- Password hashing with bcrypt
+- Parameterized SQL only
+- Input validation on upload
+- File size limits + extension checks
+- CSRF considerations (Shiny session boundaries)
+- Secrets via environment variables (no creds in repo)
+- Audit trail table for critical actions
+- Role-based authorization enforced in server logic
+
+====================================================================
+7) DEMO DATASET (MAKE IT LOOK REAL)
+====================================================================
+
+Provide a synthetic dataset that looks like production:
+- date
+- team
+- region
+- metric_name
+- metric_value
+- optional dimensions (channel, product, etc.)
+
+Seed script generates:
+- 6 months of data
+- seasonality
+- a few injected anomalies
+- a few bad rows for validation demo
+
+====================================================================
+8) ACCEPTANCE CRITERIA (WHAT “DONE” MEANS)
+====================================================================
+
+A) Reviewer can access a live link with HTTPS
+B) Login works; roles restrict access correctly
+C) Upload CSV:
+   - validation results shown
+   - errors downloadable
+   - valid rows persisted
+D) Dashboard updates from persisted data
+E) Anomalies detected, stored, and visible
+F) Anomaly -> incident workflow works end-to-end
+G) Audit log exists and shows user actions
+H) Tests pass in CI
+I) Dockerized deployment reproducible from README
+J) Screenshots included in README
+
+====================================================================
+9) MILESTONES (RUTHLESS, FAST, REAL)
+====================================================================
+
+Milestone 1: Foundation + Architecture (Day 1–2)
+- Repo scaffold + renv
+- DB schema + migrations
+- Auth + roles + base navigation
+- Docker compose local run
+
+Deliverable:
+- running app locally with login + empty pages
+- migrations runnable
+
+Milestone 2: Data Pipeline + Quality (Day 3–4)
+- CSV upload -> staging -> validate -> commit
+- Rule engine + UI
+- Job run log + error reporting
+
+Deliverable:
+- import + validation fully working
+- error export
+
+Milestone 3: Analytics + Explorer (Day 5–6)
+- KPI dashboard + trend views
+- Drill-down explorer with server-side paging
+- Caching + performance guards
+
+Deliverable:
+- responsive dashboards on seeded data
+
+Milestone 4: Anomalies + Workflow (Day 7–8)
+- Anomaly detection + persistence
+- Convert to incident + assignment + comments + statuses
+- Audit trail
+
+Deliverable:
+- full anomaly -> incident flow
+
+Milestone 5: Reporting + Observability (Day 9–10)
+- Report export (PDF/HTML)
+- Health endpoint + admin job history
+- Logging improvements
+
+Deliverable:
+- exports + admin ops view
+
+Milestone 6: CI/CD + Hostinger Deployment (Day 11–12)
+- GitHub Actions pipeline
+- VPS deploy (Docker + Nginx + SSL)
+- Backups and restart policy
+
+Deliverable:
+- live production link + documented deploy
+
+Milestone 7: Polish + Proof Package (Day 13)
+- README: architecture, screenshots, runbook
+- quick demo video (optional but strong)
+- code cleanup + final checks
+
+Deliverable:
+- “review-ready” repo + live app
+
+====================================================================
+10) WHAT YOU SEND YASSINE (THE “KNOCKOUT” PACKAGE)
+====================================================================
+
+1) A short resume paragraph (as he requested)
+2) Link to the live app (HTTPS)
+3) Link to GitHub repo with clean structure and tests
+4) 4–8 screenshots embedded in README
+5) Optional 2-minute Loom demo walking through:
+   login -> upload -> quality -> anomaly -> incident -> export
+
+====================================================================
+11) WHY THIS WINS
+====================================================================
+
+Most candidates:
+- send a shinyapps.io toy dashboard
+- no DB, no auth, no tests, no deployment story
+
+This:
+- proves you can build, deploy, and maintain a real system
+- proves you understand architecture, security, and operations
+- gives him exactly what he asked for: production-grade R code
+
+====================================================================
+END OF SCOPE
+====================================================================
+
+
+MySQL User=u280406916_SignalOps
+MySQL Database=u280406916_SignalOps
+password=6GSaZLVVPMi>
