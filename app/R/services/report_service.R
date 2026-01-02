@@ -92,13 +92,15 @@ get_kpi_report_data <- function(pool, tenant_id, start_date, end_date) {
 #' @param end_date End date
 #' @return List with anomaly data
 get_anomaly_report_data <- function(pool, tenant_id, start_date, end_date) {
+  # MySQL compatible - use SUM(CASE WHEN) instead of COUNT(*) FILTER
   summary <- safe_query(pool, "
     SELECT 
       COUNT(*) as total,
-      COUNT(*) FILTER (WHERE severity = 'high') as high_count,
-      COUNT(*) FILTER (WHERE severity = 'medium') as medium_count,
-      COUNT(*) FILTER (WHERE severity = 'low') as low_count,
-      COUNT(*) FILTER (WHERE is_acknowledged) as acknowledged_count
+      SUM(CASE WHEN severity = 'high' THEN 1 ELSE 0 END) as high_count,
+      SUM(CASE WHEN severity = 'medium' THEN 1 ELSE 0 END) as medium_count,
+      SUM(CASE WHEN severity = 'low' THEN 1 ELSE 0 END) as low_count,
+      SUM(CASE WHEN is_acknowledged = TRUE THEN 1 ELSE 0 END) 
+        as acknowledged_count
     FROM anomalies
     WHERE tenant_id = $1
       AND detection_date BETWEEN $2 AND $3
@@ -160,30 +162,38 @@ get_anomaly_report_data <- function(pool, tenant_id, start_date, end_date) {
 #' @param end_date End date
 #' @return List with incident data
 get_incident_report_data <- function(pool, tenant_id, start_date, end_date) {
+  # MySQL compatible query
   summary <- safe_query(pool, "
     SELECT 
       COUNT(*) as total,
-      COUNT(*) FILTER (WHERE status = 'open') as open_count,
-      COUNT(*) FILTER (WHERE status = 'investigating') as investigating_count,
-      COUNT(*) FILTER (WHERE status = 'closed') as closed_count,
-      COUNT(*) FILTER (WHERE sla_due_at < CURRENT_TIMESTAMP AND status NOT IN ('closed', 'false_positive')) as sla_breached,
-      AVG(EXTRACT(EPOCH FROM (COALESCE(resolved_at, CURRENT_TIMESTAMP) - created_at)) / 3600) 
-        FILTER (WHERE status = 'closed') as avg_resolution_hours
+      SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) as open_count,
+      SUM(CASE WHEN status = 'investigating' THEN 1 ELSE 0 END) 
+        as investigating_count,
+      SUM(CASE WHEN status = 'closed' THEN 1 ELSE 0 END) as closed_count,
+      SUM(CASE WHEN sla_due_at < NOW() 
+               AND status NOT IN ('closed', 'false_positive') 
+          THEN 1 ELSE 0 END) as sla_breached,
+      AVG(CASE WHEN status = 'closed' 
+          THEN TIMESTAMPDIFF(SECOND, created_at, 
+                             COALESCE(resolved_at, NOW())) / 3600 
+          ELSE NULL END) as avg_resolution_hours
     FROM incidents
     WHERE tenant_id = $1
-      AND created_at::date BETWEEN $2 AND $3
+      AND DATE(created_at) BETWEEN $2 AND $3
   ", params = list(tenant_id, start_date, end_date))
   
   by_severity <- safe_query(pool, "
     SELECT 
       severity,
       COUNT(*) as total,
-      COUNT(*) FILTER (WHERE status = 'closed') as closed,
-      AVG(EXTRACT(EPOCH FROM (COALESCE(resolved_at, CURRENT_TIMESTAMP) - created_at)) / 3600) 
-        FILTER (WHERE status = 'closed') as avg_resolution_hours
+      SUM(CASE WHEN status = 'closed' THEN 1 ELSE 0 END) as closed,
+      AVG(CASE WHEN status = 'closed' 
+          THEN TIMESTAMPDIFF(SECOND, created_at, 
+                             COALESCE(resolved_at, NOW())) / 3600 
+          ELSE NULL END) as avg_resolution_hours
     FROM incidents
     WHERE tenant_id = $1
-      AND created_at::date BETWEEN $2 AND $3
+      AND DATE(created_at) BETWEEN $2 AND $3
     GROUP BY severity
   ", params = list(tenant_id, start_date, end_date))
   
@@ -191,11 +201,11 @@ get_incident_report_data <- function(pool, tenant_id, start_date, end_date) {
     SELECT 
       COALESCE(u.email, 'Unassigned') as assignee,
       COUNT(*) as total,
-      COUNT(*) FILTER (WHERE i.status = 'closed') as closed
+      SUM(CASE WHEN i.status = 'closed' THEN 1 ELSE 0 END) as closed
     FROM incidents i
     LEFT JOIN users u ON i.assigned_to = u.id
     WHERE i.tenant_id = $1
-      AND i.created_at::date BETWEEN $2 AND $3
+      AND DATE(i.created_at) BETWEEN $2 AND $3
     GROUP BY u.email
     ORDER BY total DESC
   ", params = list(tenant_id, start_date, end_date))
@@ -212,7 +222,7 @@ get_incident_report_data <- function(pool, tenant_id, start_date, end_date) {
     FROM incidents i
     LEFT JOIN users u ON i.assigned_to = u.id
     WHERE i.tenant_id = $1
-      AND i.created_at::date BETWEEN $2 AND $3
+      AND DATE(i.created_at) BETWEEN $2 AND $3
     ORDER BY i.created_at DESC
     LIMIT 50
   ", params = list(tenant_id, start_date, end_date))
@@ -232,7 +242,8 @@ get_incident_report_data <- function(pool, tenant_id, start_date, end_date) {
 #' @param end_date End date
 #' @param metric_names Optional metric name filter
 #' @return Data frame for export
-export_metrics_csv <- function(pool, tenant_id, start_date, end_date, metric_names = NULL) {
+export_metrics_csv <- function(pool, tenant_id, start_date, end_date, 
+                               metric_names = NULL) {
   query <- "
     SELECT 
       metric_date,
@@ -315,7 +326,7 @@ export_incidents_csv <- function(pool, tenant_id, start_date, end_date) {
     LEFT JOIN users u_assigned ON i.assigned_to = u_assigned.id
     LEFT JOIN users u_created ON i.created_by = u_created.id
     WHERE i.tenant_id = $1
-      AND i.created_at::date BETWEEN $2 AND $3
+      AND DATE(i.created_at) BETWEEN $2 AND $3
     ORDER BY i.created_at DESC
   ", params = list(tenant_id, start_date, end_date))
 }
@@ -336,7 +347,8 @@ create_report_job <- function(pool, tenant_id, user_id, report_type, parameters)
     job_id,
     tenant_id,
     user_id,
-    jsonlite::toJSON(list(report_type = report_type, parameters = parameters), auto_unbox = TRUE)
+    jsonlite::toJSON(list(report_type = report_type, parameters = parameters), 
+                     auto_unbox = TRUE)
   ))
   
   if (rows > 0) {
@@ -350,4 +362,27 @@ create_report_job <- function(pool, tenant_id, user_id, report_type, parameters)
   } else {
     NULL
   }
+}
+
+#' Get recent reports for a tenant
+#' @param pool Database pool
+#' @param tenant_id Tenant ID
+#' @param limit Max records
+#' @return Data frame of recent reports
+get_recent_reports <- function(pool, tenant_id, limit = 20) {
+  # MySQL compatible - use JSON_UNQUOTE/JSON_EXTRACT instead of ->>
+  safe_query(pool, "
+    SELECT
+      j.id,
+      j.job_type,
+      JSON_UNQUOTE(JSON_EXTRACT(j.payload, '$.report_type')) as report_type,
+      j.status,
+      j.created_at,
+      u.email as created_by
+    FROM jobs j
+    LEFT JOIN users u ON j.user_id = u.id
+    WHERE j.tenant_id = $1 AND j.job_type = 'report_generation'
+    ORDER BY j.created_at DESC
+    LIMIT $2
+  ", params = list(tenant_id, limit))
 }

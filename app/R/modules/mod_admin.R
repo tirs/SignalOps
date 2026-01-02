@@ -210,12 +210,14 @@ mod_admin_server <- function(id, pool, session_data) {
         WHERE is_active = TRUE AND expires_at > CURRENT_TIMESTAMP
       ")
       
-      # Recent job stats
+      # Recent job stats (MySQL compatible)
       job_stats <- safe_query(pool, "
         SELECT 
-          COUNT(*) FILTER (WHERE status = 'pending') as pending,
-          COUNT(*) FILTER (WHERE status = 'running') as running,
-          COUNT(*) FILTER (WHERE status = 'failed' AND created_at > CURRENT_TIMESTAMP - INTERVAL '24 hours') as failed_24h
+          SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+          SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) as running,
+          SUM(CASE WHEN status = 'failed' 
+              AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR) 
+              THEN 1 ELSE 0 END) as failed_24h
         FROM jobs
       ")
       

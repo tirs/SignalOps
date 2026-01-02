@@ -9,12 +9,16 @@
 #' @param original_filename Original filename from upload
 #' @param file_size File size in bytes
 #' @return Import ID
-create_import <- function(pool, tenant_id, user_id, filename, original_filename, file_size) {
+create_import <- function(pool, tenant_id, user_id, filename, 
+                          original_filename, file_size) {
   import_id <- generate_id()
   rows <- safe_execute(pool, "
-    INSERT INTO data_imports (id, tenant_id, user_id, filename, original_filename, file_size_bytes, status)
+    INSERT INTO data_imports 
+      (id, tenant_id, user_id, filename, original_filename, 
+       file_size_bytes, status)
     VALUES ($1, $2, $3, $4, $5, $6, 'pending')
-  ", params = list(import_id, tenant_id, user_id, filename, original_filename, file_size))
+  ", params = list(import_id, tenant_id, user_id, filename, 
+                   original_filename, file_size))
   
   if (rows > 0) {
     create_audit_log(pool, "data_import",
@@ -22,9 +26,11 @@ create_import <- function(pool, tenant_id, user_id, filename, original_filename,
                      tenant_id = tenant_id,
                      entity_type = "import",
                      entity_id = import_id,
-                     new_values = list(filename = original_filename, size = file_size))
+                     new_values = list(filename = original_filename, 
+                                       size = file_size))
     
-    log_app_info("Import created", import_id = import_id, filename = original_filename)
+    log_app_info("Import created", import_id = import_id, 
+                 filename = original_filename)
     import_id
   } else {
     NULL
@@ -40,13 +46,13 @@ update_import_status <- function(pool, import_id, status, error_message = NULL) 
   if (status == "processing") {
     safe_execute(pool, "
       UPDATE data_imports 
-      SET status = $1, started_at = CURRENT_TIMESTAMP
+      SET status = $1, started_at = NOW()
       WHERE id = $2
     ", params = list(status, import_id))
   } else if (status %in% c("completed", "failed")) {
     safe_execute(pool, "
       UPDATE data_imports 
-      SET status = $1, completed_at = CURRENT_TIMESTAMP, error_message = $2
+      SET status = $1, completed_at = NOW(), error_message = $2
       WHERE id = $3
     ", params = list(status, error_message, import_id))
   } else {
@@ -120,9 +126,10 @@ stage_import_data <- function(pool, import_id, data, chunk_size = 1000) {
       on.exit(pool::poolReturn(conn), add = TRUE)
       
       for (j in seq_len(nrow(staging_records))) {
+        # MySQL compatible - use ? placeholders
         DBI::dbExecute(conn, "
           INSERT INTO staging_data (id, import_id, row_num, raw_data)
-          VALUES ($1, $2, $3, $4)
+          VALUES (?, ?, ?, ?)
         ", params = list(
           staging_records$id[j],
           staging_records$import_id[j],
@@ -154,11 +161,11 @@ stage_import_data <- function(pool, import_id, data, chunk_size = 1000) {
 #' @return Number of rows committed
 commit_import_data <- function(pool, import_id, tenant_id) {
   result <- with_transaction(pool, function(conn) {
-    # Get valid staged rows
+    # Get valid staged rows - MySQL compatible
     valid_rows <- DBI::dbGetQuery(conn, "
       SELECT id, raw_data 
       FROM staging_data 
-      WHERE import_id = $1 AND is_valid = TRUE
+      WHERE import_id = ? AND is_valid = TRUE
     ", params = list(import_id))
     
     if (nrow(valid_rows) == 0) {
@@ -176,10 +183,11 @@ commit_import_data <- function(pool, import_id, tenant_id) {
       
       DBI::dbExecute(conn, "
         INSERT INTO metrics_data 
-          (tenant_id, import_id, metric_date, team, region, channel, product, 
-           metric_name, metric_value, metadata)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          (id, tenant_id, import_id, metric_date, team, region, channel, 
+           product, metric_name, metric_value, metadata)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ", params = list(
+        generate_id(),
         tenant_id,
         import_id,
         metric_date,
@@ -198,8 +206,8 @@ commit_import_data <- function(pool, import_id, tenant_id) {
     # Update import with valid count
     DBI::dbExecute(conn, "
       UPDATE data_imports 
-      SET valid_row_count = $1, status = 'completed', completed_at = CURRENT_TIMESTAMP
-      WHERE id = $2
+      SET valid_row_count = ?, status = 'completed', completed_at = NOW()
+      WHERE id = ?
     ", params = list(committed, import_id))
     
     committed
@@ -266,12 +274,12 @@ get_import_details <- function(pool, import_id) {
     ORDER BY error_count DESC
   ", params = list(import_id))
   
-  # Get top failing rows
+  # Get top failing rows - MySQL compatible (no ARRAY_AGG)
   failing_rows <- safe_query(pool, "
     SELECT 
       sd.row_num,
       sd.raw_data,
-      ARRAY_AGG(vr.error_message) as errors
+      GROUP_CONCAT(vr.error_message SEPARATOR '; ') as errors
     FROM staging_data sd
     JOIN validation_results vr ON sd.id = vr.staging_row_id
     WHERE sd.import_id = $1 AND sd.is_valid = FALSE
@@ -291,7 +299,8 @@ get_import_details <- function(pool, import_id) {
 #' @param pool Database pool
 #' @param import_id Import ID
 delete_staging_data <- function(pool, import_id) {
-  safe_execute(pool, "DELETE FROM staging_data WHERE import_id = $1", params = list(import_id))
+  safe_execute(pool, "DELETE FROM staging_data WHERE import_id = $1", 
+               params = list(import_id))
 }
 
 #' Export validation errors as CSV
@@ -311,4 +320,27 @@ export_validation_errors <- function(pool, import_id) {
     WHERE vr.import_id = $1
     ORDER BY vr.row_num, vr.column_name
   ", params = list(import_id))
+}
+
+#' Get import quality statistics
+#' @param pool Database pool
+#' @param tenant_id Tenant ID
+#' @param days Number of days to look back
+#' @return Import quality stats
+get_import_stats <- function(pool, tenant_id, days = 30) {
+  # MySQL compatible query
+  safe_query(pool, "
+    SELECT
+      COUNT(*) as total_imports,
+      SUM(row_count) as total_rows,
+      SUM(valid_row_count) as valid_rows,
+      SUM(error_count) as total_errors,
+      AVG(CASE WHEN row_count > 0
+          THEN CAST(valid_row_count AS DECIMAL) / row_count * 100
+          ELSE 0 END) as avg_valid_pct
+    FROM data_imports
+    WHERE tenant_id = $1
+      AND status = 'completed'
+      AND created_at >= DATE_SUB(CURDATE(), INTERVAL $2 DAY)
+  ", params = list(tenant_id, days))
 }

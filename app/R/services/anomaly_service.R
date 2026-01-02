@@ -15,7 +15,7 @@ compute_baselines <- function(pool, tenant_id, window_days = 30) {
       region
     FROM metrics_data
     WHERE tenant_id = $1
-      AND metric_date >= CURRENT_DATE - $2
+      AND metric_date >= DATE_SUB(CURDATE(), INTERVAL $2 DAY)
   ", params = list(tenant_id, window_days))
   
   if (is.null(metrics) || nrow(metrics) == 0) {
@@ -39,9 +39,10 @@ compute_baselines <- function(pool, tenant_id, window_days = 30) {
         AND metric_name = $2
         AND (team = $3 OR ($3 IS NULL AND team IS NULL))
         AND (region = $4 OR ($4 IS NULL AND region IS NULL))
-        AND metric_date >= CURRENT_DATE - $5
+        AND metric_date >= DATE_SUB(CURDATE(), INTERVAL $5 DAY)
       ORDER BY metric_date
-    ", params = list(tenant_id, metric$metric_name, metric$team, metric$region, window_days))
+    ", params = list(tenant_id, metric$metric_name, metric$team, 
+                     metric$region, window_days))
     
     if (is.null(values) || nrow(values) < 7) {
       next  # Not enough data points
@@ -55,25 +56,25 @@ compute_baselines <- function(pool, tenant_id, window_days = 30) {
     baseline_median <- median(vals, na.rm = TRUE)
     baseline_mad <- mad(vals, na.rm = TRUE)
     
-    # Upsert baseline
+    # MySQL uses INSERT ... ON DUPLICATE KEY UPDATE
     safe_execute(pool, "
       INSERT INTO anomaly_baselines 
-        (tenant_id, metric_name, dimensions_hash, dimensions, 
+        (id, tenant_id, metric_name, dimensions_hash, dimensions, 
          baseline_mean, baseline_std, baseline_median, baseline_mad,
          data_points, window_start, window_end, calculated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 
-              CURRENT_DATE - $10, CURRENT_DATE, CURRENT_TIMESTAMP)
-      ON CONFLICT (tenant_id, metric_name, dimensions_hash)
-      DO UPDATE SET
-        baseline_mean = EXCLUDED.baseline_mean,
-        baseline_std = EXCLUDED.baseline_std,
-        baseline_median = EXCLUDED.baseline_median,
-        baseline_mad = EXCLUDED.baseline_mad,
-        data_points = EXCLUDED.data_points,
-        window_start = EXCLUDED.window_start,
-        window_end = EXCLUDED.window_end,
-        calculated_at = CURRENT_TIMESTAMP
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 
+              DATE_SUB(CURDATE(), INTERVAL $11 DAY), CURDATE(), NOW())
+      ON DUPLICATE KEY UPDATE
+        baseline_mean = VALUES(baseline_mean),
+        baseline_std = VALUES(baseline_std),
+        baseline_median = VALUES(baseline_median),
+        baseline_mad = VALUES(baseline_mad),
+        data_points = VALUES(data_points),
+        window_start = VALUES(window_start),
+        window_end = VALUES(window_end),
+        calculated_at = NOW()
     ", params = list(
+      generate_id(),
       tenant_id,
       metric$metric_name,
       dims_hash,
@@ -107,7 +108,7 @@ detect_anomalies <- function(pool, tenant_id, config = NULL) {
     )
   }
   
-  # Get recent metrics with baselines
+  # Get recent metrics with baselines (MySQL compatible)
   metrics <- safe_query(pool, "
     SELECT 
       m.id,
@@ -126,10 +127,10 @@ detect_anomalies <- function(pool, tenant_id, config = NULL) {
       b.tenant_id = m.tenant_id
       AND b.metric_name = m.metric_name
       AND b.dimensions_hash = MD5(
-        COALESCE(m.team, '') || '|' || COALESCE(m.region, '')
+        CONCAT(COALESCE(m.team, ''), '|', COALESCE(m.region, ''))
       )
     WHERE m.tenant_id = $1
-      AND m.metric_date >= CURRENT_DATE - 1
+      AND m.metric_date >= DATE_SUB(CURDATE(), INTERVAL 1 DAY)
       AND b.id IS NOT NULL
       AND b.baseline_std > 0
   ", params = list(tenant_id))
@@ -169,24 +170,28 @@ detect_anomalies <- function(pool, tenant_id, config = NULL) {
       }
       
       # Calculate thresholds
-      threshold_low <- m$baseline_mean - (config$zscore_threshold_low * m$baseline_std)
-      threshold_high <- m$baseline_mean + (config$zscore_threshold_low * m$baseline_std)
+      threshold_low <- m$baseline_mean - 
+        (config$zscore_threshold_low * m$baseline_std)
+      threshold_high <- m$baseline_mean + 
+        (config$zscore_threshold_low * m$baseline_std)
       
       # Generate explanation
       direction <- if (zscore > 0) "above" else "below"
       explanation <- sprintf(
-        "Value %.2f is %.1f standard deviations %s the baseline (mean: %.2f, std: %.2f)",
-        m$metric_value, abs_zscore, direction, m$baseline_mean, m$baseline_std
+        "Value %.2f is %.1f standard deviations %s the baseline (mean: %.2f)",
+        m$metric_value, abs_zscore, direction, m$baseline_mean
       )
       
       # Insert anomaly
       safe_execute(pool, "
         INSERT INTO anomalies 
-          (tenant_id, metric_id, detection_date, metric_name, metric_value,
+          (id, tenant_id, metric_id, detection_date, metric_name, metric_value,
            baseline_value, threshold_low, threshold_high, zscore, severity,
            detection_method, explanation, dimensions)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'zscore', $11, $12)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 
+                'zscore', $12, $13)
       ", params = list(
+        generate_id(),
         tenant_id,
         m$id,
         m$metric_date,
@@ -282,7 +287,7 @@ acknowledge_anomaly <- function(pool, anomaly_id, user_id) {
     UPDATE anomalies 
     SET is_acknowledged = TRUE, 
         acknowledged_by = $1, 
-        acknowledged_at = CURRENT_TIMESTAMP
+        acknowledged_at = NOW()
     WHERE id = $2
   ", params = list(user_id, anomaly_id))
 }
@@ -300,7 +305,7 @@ get_anomaly_trend <- function(pool, tenant_id, days = 30) {
       COUNT(*) as count
     FROM anomalies
     WHERE tenant_id = $1
-      AND detection_date >= CURRENT_DATE - $2
+      AND detection_date >= DATE_SUB(CURDATE(), INTERVAL $2 DAY)
     GROUP BY detection_date, severity
     ORDER BY detection_date
   ", params = list(tenant_id, days))
@@ -312,17 +317,20 @@ get_anomaly_trend <- function(pool, tenant_id, days = 30) {
 #' @param days Number of days
 #' @return List with anomaly stats
 get_anomaly_stats <- function(pool, tenant_id, days = 30) {
+  # MySQL compatible - use SUM(CASE WHEN) instead of COUNT(*) FILTER
   stats <- safe_query(pool, "
     SELECT 
       COUNT(*) as total,
-      COUNT(*) FILTER (WHERE severity = 'high') as high_count,
-      COUNT(*) FILTER (WHERE severity = 'medium') as medium_count,
-      COUNT(*) FILTER (WHERE severity = 'low') as low_count,
-      COUNT(*) FILTER (WHERE is_acknowledged = TRUE) as acknowledged_count,
-      COUNT(*) FILTER (WHERE is_acknowledged = FALSE) as unacknowledged_count
+      SUM(CASE WHEN severity = 'high' THEN 1 ELSE 0 END) as high_count,
+      SUM(CASE WHEN severity = 'medium' THEN 1 ELSE 0 END) as medium_count,
+      SUM(CASE WHEN severity = 'low' THEN 1 ELSE 0 END) as low_count,
+      SUM(CASE WHEN is_acknowledged = TRUE THEN 1 ELSE 0 END) 
+        as acknowledged_count,
+      SUM(CASE WHEN is_acknowledged = FALSE THEN 1 ELSE 0 END) 
+        as unacknowledged_count
     FROM anomalies
     WHERE tenant_id = $1
-      AND detection_date >= CURRENT_DATE - $2
+      AND detection_date >= DATE_SUB(CURDATE(), INTERVAL $2 DAY)
   ", params = list(tenant_id, days))
   
   by_metric <- safe_query(pool, "
@@ -332,7 +340,7 @@ get_anomaly_stats <- function(pool, tenant_id, days = 30) {
       AVG(ABS(zscore)) as avg_zscore
     FROM anomalies
     WHERE tenant_id = $1
-      AND detection_date >= CURRENT_DATE - $2
+      AND detection_date >= DATE_SUB(CURDATE(), INTERVAL $2 DAY)
     GROUP BY metric_name
     ORDER BY count DESC
     LIMIT 10

@@ -114,37 +114,37 @@ mod_overview_server <- function(id, pool, session_data) {
       tenant_id <- session_data$user$tenant_id
       dates <- date_range()
       
-      # Total data points
+      # Total data points (MySQL compatible)
       metrics_count <- safe_query(pool, "
         SELECT COUNT(*) as total, COUNT(DISTINCT metric_name) as metrics
         FROM metrics_data
         WHERE tenant_id = $1 AND metric_date >= $2
       ", params = list(tenant_id, dates$start))
       
-      # Anomaly count
+      # Anomaly count (MySQL compatible - use SUM(CASE WHEN))
       anomaly_count <- safe_query(pool, "
         SELECT 
           COUNT(*) as total,
-          COUNT(*) FILTER (WHERE severity = 'high') as high
+          SUM(CASE WHEN severity = 'high' THEN 1 ELSE 0 END) as high
         FROM anomalies
         WHERE tenant_id = $1 AND detection_date >= $2
       ", params = list(tenant_id, dates$start))
       
-      # Open incidents
+      # Open incidents (MySQL compatible)
       incident_count <- safe_query(pool, "
         SELECT 
           COUNT(*) as total,
-          COUNT(*) FILTER (WHERE sla_due_at < CURRENT_TIMESTAMP) as breached
+          SUM(CASE WHEN sla_due_at < NOW() THEN 1 ELSE 0 END) as breached
         FROM incidents
         WHERE tenant_id = $1 AND status NOT IN ('closed', 'false_positive')
       ", params = list(tenant_id))
       
-      # Data quality
+      # Data quality (MySQL compatible - use CAST)
       quality_stats <- safe_query(pool, "
         SELECT 
           COALESCE(AVG(
             CASE WHEN row_count > 0 
-            THEN valid_row_count::float / row_count * 100 
+            THEN CAST(valid_row_count AS DECIMAL) / row_count * 100 
             ELSE 100 END
           ), 100) as avg_valid_pct
         FROM data_imports
@@ -296,7 +296,8 @@ mod_overview_server <- function(id, pool, session_data) {
         )
       }
       
-      colors <- c("low" = "#22c55e", "medium" = "#f59e0b", "high" = "#ef4444", "critical" = "#7c3aed")
+      colors <- c("low" = "#22c55e", "medium" = "#f59e0b", 
+                  "high" = "#ef4444", "critical" = "#7c3aed")
       
       plot_ly(anomaly_data, 
               labels = ~severity, 
