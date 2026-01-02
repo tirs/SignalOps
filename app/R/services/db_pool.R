@@ -67,8 +67,9 @@ safe_query <- function(pool, query, params = list()) {
 #' @param num_params Number of parameters
 #' @return Converted query
 convert_params_to_mysql <- function(query, num_params) {
-  for (i in seq_len(num_params)) {
-    query <- gsub(paste0("\\$", i, "(?![0-9])"), "?", query, perl = TRUE)
+  # Convert in reverse order to avoid $1 matching $10, $11, etc.
+  for (i in rev(seq_len(num_params))) {
+    query <- gsub(paste0("\\$", i, "\\b"), "?", query, perl = TRUE)
   }
   query
 }

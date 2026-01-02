@@ -328,24 +328,25 @@ export_incidents_csv <- function(pool, tenant_id, start_date, end_date) {
 #' @param parameters Report parameters
 #' @return Job ID
 create_report_job <- function(pool, tenant_id, user_id, report_type, parameters) {
-  result <- safe_query(pool, "
-    INSERT INTO jobs (tenant_id, user_id, job_type, status, payload)
-    VALUES ($1, $2, 'report_generation', 'pending', $3)
-    RETURNING id
+  job_id <- generate_id()
+  rows <- safe_execute(pool, "
+    INSERT INTO jobs (id, tenant_id, user_id, job_type, status, payload)
+    VALUES ($1, $2, $3, 'report_generation', 'pending', $4)
   ", params = list(
+    job_id,
     tenant_id,
     user_id,
     jsonlite::toJSON(list(report_type = report_type, parameters = parameters), auto_unbox = TRUE)
   ))
   
-  if (!is.null(result) && nrow(result) > 0) {
+  if (rows > 0) {
     create_audit_log(pool, "report_generate",
                      user_id = user_id,
                      tenant_id = tenant_id,
                      entity_type = "job",
-                     entity_id = result$id,
+                     entity_id = job_id,
                      metadata = list(report_type = report_type))
-    result$id
+    job_id
   } else {
     NULL
   }

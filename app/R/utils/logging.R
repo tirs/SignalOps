@@ -59,34 +59,36 @@ create_audit_log <- function(pool, action, user_id = NULL, tenant_id = NULL,
                              session_id = NULL, ip_address = NULL,
                              user_agent = NULL, metadata = list()) {
   tryCatch({
-    query <- "
-      INSERT INTO audit_logs 
-        (tenant_id, user_id, session_id, action, entity_type, entity_id,
-         old_values, new_values, ip_address, user_agent, metadata)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      RETURNING id
-    "
+    audit_id <- uuid::UUIDgenerate()
     
-    result <- dbGetQuery(pool, query, params = list(
+    result <- safe_execute(pool, "
+      INSERT INTO audit_logs 
+        (id, tenant_id, user_id, session_id, action, entity_type, entity_id,
+         old_values, new_values, ip_address, user_agent, metadata)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    ", params = list(
+      audit_id,
       tenant_id,
       user_id,
       session_id,
       action,
       entity_type,
       entity_id,
-      if (!is.null(old_values)) toJSON(old_values, auto_unbox = TRUE) else NULL,
-      if (!is.null(new_values)) toJSON(new_values, auto_unbox = TRUE) else NULL,
+      if (!is.null(old_values)) jsonlite::toJSON(old_values, auto_unbox = TRUE) else NULL,
+      if (!is.null(new_values)) jsonlite::toJSON(new_values, auto_unbox = TRUE) else NULL,
       ip_address,
       user_agent,
-      toJSON(metadata, auto_unbox = TRUE)
+      jsonlite::toJSON(metadata, auto_unbox = TRUE)
     ))
     
-    log_app_debug("Audit log created", 
-                  audit_id = result$id, 
-                  action = action, 
-                  user_id = user_id)
+    if (result > 0) {
+      log_app_debug("Audit log created", 
+                    audit_id = audit_id, 
+                    action = action, 
+                    user_id = user_id)
+    }
     
-    invisible(result$id)
+    invisible(audit_id)
   }, error = function(e) {
     log_app_error("Failed to create audit log", 
                   error = e$message, 
@@ -131,35 +133,39 @@ get_audit_logs <- function(pool, tenant_id = NULL, user_id = NULL,
   
   if (!is.null(tenant_id)) {
     param_count <- param_count + 1
-    query <- paste0(query, " AND al.tenant_id = $", param_count)
+    query <- paste0(query, " AND al.tenant_id = ?")
     params[[param_count]] <- tenant_id
   }
   
   if (!is.null(user_id)) {
     param_count <- param_count + 1
-    query <- paste0(query, " AND al.user_id = $", param_count)
+    query <- paste0(query, " AND al.user_id = ?")
     params[[param_count]] <- user_id
   }
   
   if (!is.null(action)) {
     param_count <- param_count + 1
-    query <- paste0(query, " AND al.action = $", param_count)
+    query <- paste0(query, " AND al.action = ?")
     params[[param_count]] <- action
   }
   
   if (!is.null(start_date)) {
     param_count <- param_count + 1
-    query <- paste0(query, " AND al.created_at >= $", param_count)
+    query <- paste0(query, " AND al.created_at >= ?")
     params[[param_count]] <- start_date
   }
   
   if (!is.null(end_date)) {
     param_count <- param_count + 1
-    query <- paste0(query, " AND al.created_at <= $", param_count)
+    query <- paste0(query, " AND al.created_at <= ?")
     params[[param_count]] <- end_date
   }
   
   query <- paste0(query, " ORDER BY al.created_at DESC LIMIT ", limit, " OFFSET ", offset)
   
-  dbGetQuery(pool, query, params = params)
+  if (length(params) > 0) {
+    safe_query(pool, query, params = params)
+  } else {
+    safe_query(pool, query)
+  }
 }

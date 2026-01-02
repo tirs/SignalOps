@@ -393,3 +393,8 @@ END OF SCOPE
 MySQL User=u280406916_SignalOps
 MySQL Database=u280406916_SignalOps
 password=6GSaZLVVPMi>
+
+cat /var/log/shiny-server/signalops-shiny-*.log | tail -30
+
+
+

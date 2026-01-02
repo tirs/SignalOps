@@ -10,22 +10,22 @@
 #' @param file_size File size in bytes
 #' @return Import ID
 create_import <- function(pool, tenant_id, user_id, filename, original_filename, file_size) {
-  result <- safe_query(pool, "
-    INSERT INTO data_imports (tenant_id, user_id, filename, original_filename, file_size_bytes, status)
-    VALUES ($1, $2, $3, $4, $5, 'pending')
-    RETURNING id
-  ", params = list(tenant_id, user_id, filename, original_filename, file_size))
+  import_id <- generate_id()
+  rows <- safe_execute(pool, "
+    INSERT INTO data_imports (id, tenant_id, user_id, filename, original_filename, file_size_bytes, status)
+    VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+  ", params = list(import_id, tenant_id, user_id, filename, original_filename, file_size))
   
-  if (!is.null(result) && nrow(result) > 0) {
+  if (rows > 0) {
     create_audit_log(pool, "data_import",
                      user_id = user_id,
                      tenant_id = tenant_id,
                      entity_type = "import",
-                     entity_id = result$id,
+                     entity_id = import_id,
                      new_values = list(filename = original_filename, size = file_size))
     
-    log_app_info("Import created", import_id = result$id, filename = original_filename)
-    result$id
+    log_app_info("Import created", import_id = import_id, filename = original_filename)
+    import_id
   } else {
     NULL
   }

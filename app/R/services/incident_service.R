@@ -21,13 +21,14 @@ create_incident <- function(pool, tenant_id, anomaly_id = NULL, title, descripti
     NULL
   }
   
-  result <- safe_query(pool, "
+  incident_id <- generate_id()
+  rows <- safe_execute(pool, "
     INSERT INTO incidents 
-      (tenant_id, anomaly_id, title, description, status, severity, 
+      (id, tenant_id, anomaly_id, title, description, status, severity, 
        created_by, assigned_to, sla_due_at)
-    VALUES ($1, $2, $3, $4, 'open', $5, $6, $7, $8)
-    RETURNING id
+    VALUES ($1, $2, $3, $4, $5, 'open', $6, $7, $8, $9)
   ", params = list(
+    incident_id,
     tenant_id,
     anomaly_id,
     title,
@@ -38,8 +39,7 @@ create_incident <- function(pool, tenant_id, anomaly_id = NULL, title, descripti
     sla_due_at
   ))
   
-  if (!is.null(result) && nrow(result) > 0) {
-    incident_id <- result$id
+  if (rows > 0) {
     
     # Create audit log
     create_audit_log(pool, "incident_create",
@@ -173,13 +173,13 @@ assign_incident <- function(pool, incident_id, assigned_to, assigned_by) {
 #' @param is_internal Whether comment is internal only
 #' @return Comment ID or NULL
 add_incident_comment <- function(pool, incident_id, user_id, content, is_internal = FALSE) {
-  result <- safe_query(pool, "
-    INSERT INTO incident_comments (incident_id, user_id, content, is_internal)
-    VALUES ($1, $2, $3, $4)
-    RETURNING id
-  ", params = list(incident_id, user_id, content, is_internal))
+  comment_id <- generate_id()
+  rows <- safe_execute(pool, "
+    INSERT INTO incident_comments (id, incident_id, user_id, content, is_internal)
+    VALUES ($1, $2, $3, $4, $5)
+  ", params = list(comment_id, incident_id, user_id, content, is_internal))
   
-  if (!is.null(result) && nrow(result) > 0) {
+  if (rows > 0) {
     # Get tenant_id for audit
     incident <- safe_query(pool, "SELECT tenant_id FROM incidents WHERE id = $1", 
                            params = list(incident_id))
@@ -189,9 +189,9 @@ add_incident_comment <- function(pool, incident_id, user_id, content, is_interna
                      tenant_id = incident$tenant_id[1],
                      entity_type = "incident",
                      entity_id = incident_id,
-                     metadata = list(comment_id = result$id))
+                     metadata = list(comment_id = comment_id))
     
-    result$id
+    comment_id
   } else {
     NULL
   }

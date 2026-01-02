@@ -299,12 +299,13 @@ validate_import_data <- function(pool, import_id, tenant_id, chunk_size = 500) {
 #' @return Rule ID or NULL
 create_validation_rule <- function(pool, tenant_id, name, description, rule_type,
                                    column_name, parameters = list(), severity = "error") {
-  result <- safe_query(pool, "
+  rule_id <- generate_id()
+  rows <- safe_execute(pool, "
     INSERT INTO validation_rules 
-      (tenant_id, name, description, rule_type, column_name, parameters, severity)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
-    RETURNING id
+      (id, tenant_id, name, description, rule_type, column_name, parameters, severity)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
   ", params = list(
+    rule_id,
     tenant_id,
     name,
     description,
@@ -314,9 +315,9 @@ create_validation_rule <- function(pool, tenant_id, name, description, rule_type
     severity
   ))
   
-  if (!is.null(result) && nrow(result) > 0) {
-    log_app_info("Validation rule created", rule_id = result$id, name = name)
-    result$id
+  if (rows > 0) {
+    log_app_info("Validation rule created", rule_id = rule_id, name = name)
+    rule_id
   } else {
     NULL
   }

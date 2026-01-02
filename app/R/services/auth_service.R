@@ -117,11 +117,13 @@ authenticate_user <- function(pool, email, password, ip_address = NULL, user_age
   session_duration <- app_config$auth$session_duration_hours %||% 24
   expires_at <- Sys.time() + (session_duration * 3600)
   
-  session_result <- safe_query(pool, "
-    INSERT INTO sessions (user_id, token, ip_address, user_agent, expires_at)
-    VALUES ($1, $2, $3, $4, $5)
-    RETURNING id
-  ", params = list(user$id, session_token, ip_address, user_agent, expires_at))
+  # Generate session ID before insert (MySQL doesn't support RETURNING)
+  session_id <- generate_id()
+  safe_execute(pool, "
+    INSERT INTO sessions (id, user_id, token, ip_address, user_agent, expires_at)
+    VALUES ($1, $2, $3, $4, $5, $6)
+  ", params = list(session_id, user$id, session_token, ip_address, user_agent, expires_at))
+  session_result <- list(id = session_id)
   
   # Reset login attempts and update last login
   safe_execute(pool, "
@@ -351,14 +353,15 @@ create_user <- function(pool, tenant_id, email, password, first_name, last_name,
   }
   
   password_hash <- hash_password(password)
+  user_id <- generate_id()
   
-  result <- safe_query(pool, "
-    INSERT INTO users (tenant_id, email, password_hash, first_name, last_name, role, status)
-    VALUES ($1, $2, $3, $4, $5, $6, 'active')
-    RETURNING id
-  ", params = list(tenant_id, email, password_hash, first_name, last_name, role))
+  rows_affected <- safe_execute(pool, "
+    INSERT INTO users (id, tenant_id, email, password_hash, first_name, last_name, role, status)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')
+  ", params = list(user_id, tenant_id, email, password_hash, first_name, last_name, role))
   
-  if (!is.null(result) && nrow(result) > 0) {
+  if (rows_affected > 0) {
+    result <- list(id = user_id)
     create_audit_log(pool, "user_create",
                      user_id = created_by,
                      tenant_id = tenant_id,
