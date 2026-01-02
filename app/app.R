@@ -132,10 +132,12 @@ server <- function(input, output, session) {
   
   # Clean up on session end
   session$onSessionEnded(function() {
-    if (!is.null(session_data$session_id)) {
-      logout_user(db_pool, session_data$session_id, 
-                  session_data$user$id, session_data$user$tenant_id)
-    }
+    isolate({
+      if (!is.null(session_data$session_id)) {
+        logout_user(db_pool, session_data$session_id, 
+                    session_data$user$id, session_data$user$tenant_id)
+      }
+    })
     log_app_info("User session ended")
   })
 }
