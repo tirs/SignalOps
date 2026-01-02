@@ -2,9 +2,18 @@
 # Connection pooling and database utilities for MySQL
 
 # Local references to logging functions (defined in logging.R, sourced in global.R)
-.log_error <- function(...) get(".log_error", envir = globalenv())(...)
-.log_info <- function(...) get(".log_info", envir = globalenv())(...)
-.log_warn <- function(...) get("log_app_warn", envir = globalenv())(...)
+.log_error <- function(...) {
+  fn <- get("log_app_error", envir = globalenv())
+  fn(...)
+}
+.log_info <- function(...) {
+  fn <- get("log_app_info", envir = globalenv())
+  fn(...)
+}
+.log_warn <- function(...) {
+  fn <- get("log_app_warn", envir = globalenv())
+  fn(...)
+}
 
 #' Initialize database connection pool
 #' @param config Database configuration list
